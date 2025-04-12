@@ -15,13 +15,17 @@ def get_upcoming_matches():
     data = res.read()
 
     # Преобразуем данные в формат JSON
-    return json.loads(data.decode("utf-8"))
+    data_json = json.loads(data.decode("utf-8"))
+    # Добавляем вывод данных для отладки
+    st.write("Response data:", data_json)  # Выводим ответ для анализа
+    return data_json
 
 # Функция отображения матчей
 def display_matches():
     matches = get_upcoming_matches()
-    
-    if matches:
+
+    # Проверка наличия ключа 'events' в ответе
+    if 'events' in matches:
         for match in matches['events']:
             home_team = match.get('homeTeam', {}).get('name', 'Unknown')
             away_team = match.get('awayTeam', {}).get('name', 'Unknown')
@@ -31,7 +35,7 @@ def display_matches():
             st.write(f"Ссылка: [Перейти на SofaScore](https://www.sofascore.com/)")  # Динамическая ссылка на матч
             st.write("------")
     else:
-        st.write("Нет предстоящих матчей")
+        st.write("Нет предстоящих матчей или неверный формат данных.")
 
 # Настройка Streamlit
 st.title('Предстоящие футбольные события')
