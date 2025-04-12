@@ -1,60 +1,72 @@
 import streamlit as st
+import requests
 import pandas as pd
-import numpy as np
-from scipy.stats import poisson
+from datetime import datetime, timedelta
 
-@st.cache_data
-def load_data():
-    return pd.read_csv("teams_stats.csv")
+# Твой API ключ
+API_TOKEN = "f2285e27e24948fca025d71981350602"
 
-def predict_score_prob(home_team, away_team, stats, max_goals=5, home_bonus=0.3):
-    home_avg_score = stats[home_team]['avg_scored']
-    home_avg_concede = stats[home_team]['avg_conceded']
-    away_avg_score = stats[away_team]['avg_scored']
-    away_avg_concede = stats[away_team]['avg_conceded']
-
-    home_expected = (home_avg_score + away_avg_concede) / 2 + home_bonus
-    away_expected = (away_avg_score + home_avg_concede) / 2
-
-    matrix = np.zeros((max_goals + 1, max_goals + 1))
-    for i in range(max_goals + 1):
-        for j in range(max_goals + 1):
-            matrix[i][j] = poisson.pmf(i, home_expected) * poisson.pmf(j, away_expected)
-    return matrix, home_expected, away_expected
-
-def main():
-    st.title("⚽ Прогноз точного счёта матча")
-
-    df = load_data()
-    teams = df['team'].tolist()
-
-    home_team = st.selectbox("Команда-хозяин", teams, index=0)
-    away_team = st.selectbox("Команда-гость", teams, index=1)
-
-    stats = {
-        row['team']: {
-            'avg_scored': row['avg_scored'],
-            'avg_conceded': row['avg_conceded']
-        }
-        for _, row in df.iterrows()
+# Функция для получения матчей, которые пройдут в течение 24 часов
+def get_upcoming_matches():
+    url = "https://api.football-data.org/v4/matches"
+    headers = {
+        'X-Auth-Token': API_TOKEN,
     }
+    
+    # Получаем текущую дату и дату через 24 часа
+    now = datetime.utcnow()
+    end_time = now + timedelta(hours=24)
+    
+    # Переводим в формат ISO 8601 (например: '2025-04-13T00:00:00Z')
+    now_str = now.isoformat() + "Z"
+    end_time_str = end_time.isoformat() + "Z"
+    
+    params = {
+        'dateFrom': now_str,
+        'dateTo': end_time_str,
+    }
+    
+    # Отправляем запрос
+    response = requests.get(url, headers=headers, params=params)
+    data = response.json()
+    
+    return data.get('matches', [])
 
-    if st.button("Спрогнозировать"):
-        matrix, home_xg, away_xg = predict_score_prob(home_team, away_team, stats)
-        score = np.unravel_index(np.argmax(matrix), matrix.shape)
-        prob = matrix[score]
+# Функция для прогноза точного счёта
+def predict_score(match):
+    # Простейший прогноз (можно заменить на более сложную модель)
+    return f"Прогноз для матча {match['homeTeam']['name']} - {match['awayTeam']['name']}: 2-1"
 
-        st.markdown(f"### 🔮 Прогноз: **{home_team} {score[0]} : {score[1]} {away_team}**")
-        st.markdown(f"📊 Ожидаемые голы: {home_team} — {home_xg:.2f}, {away_team} — {away_xg:.2f}")
-        st.markdown(f"📈 Вероятность этого счёта: **{prob:.2%}**")
+# Отображение матчей и прогнозов
+def display_predictions(matches):
+    for match in matches:
+        home_team = match['homeTeam']['name']
+        away_team = match['awayTeam']['name']
+        date = match['utcDate']
+        
+        # Создаём кнопку для каждого матча
+        if st.button(f"Прогноз для {home_team} против {away_team}"):
+            prediction = predict_score(match)
+            st.write(f"Матч: {home_team} против {away_team}")
+            st.write(f"Дата: {date}")
+            st.write(f"Прогноз: {prediction}")
+        
+# Основная функция
+def main():
+    st.title("Прогнозы на футбольные матчи")
 
-        st.subheader("🧮 Матрица вероятностей (0–5 голов)")
-        df_matrix = pd.DataFrame(
-            matrix,
-            columns=[f'{away_team} {i}' for i in range(matrix.shape[1])],
-            index=[f'{home_team} {i}' for i in range(matrix.shape[0])]
-        )
-        st.dataframe(df_matrix.style.background_gradient(cmap='Blues').format("{:.2%}"))
+    # Кнопка для получения матчей
+    if st.button("Получить прогнозы на ближайшие 24 часа"):
+        st.write("Загружаю прогнозы...")
+        
+        # Получаем матчи
+        matches = get_upcoming_matches()
+        
+        if not matches:
+            st.write("Нет матчей, которые бы проходили в течение 24 часов.")
+        else:
+            # Отображаем прогнозы
+            display_predictions(matches)
 
 if __name__ == "__main__":
     main()
