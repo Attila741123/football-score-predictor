@@ -1,42 +1,52 @@
 import streamlit as st
-import http.client
-import json
+import requests
 
-# Настройка соединения с API
+# Функция для получения предстоящих матчей
 def get_upcoming_matches():
-    conn = http.client.HTTPSConnection("sofascore.p.rapidapi.com")
+    url = "https://sofascore.p.rapidapi.com/matches/live"
     headers = {
-        'x-rapidapi-key': "a46d78e235mshf84713c91f6721ap1e0f8fjsn0b4e2a83c8b7",
-        'x-rapidapi-host': "sofascore.p.rapidapi.com"
+        "x-rapidapi-key": "a46d78e235mshf84713c91f6721ap1e0f8fjsn0b4e2a83c8b7",
+        "x-rapidapi-host": "sofascore.p.rapidapi.com"
     }
+    response = requests.get(url, headers=headers)
+    return response.json()
 
-    conn.request("GET", "/events/live?category=football", headers=headers)
-    res = conn.getresponse()
-    data = res.read()
+# Функция для получения состава команды
+def get_lineups(match_id):
+    url = "https://sofascore.p.rapidapi.com/matches/get-lineups"
+    headers = {
+        "x-rapidapi-key": "a46d78e235mshf84713c91f6721ap1e0f8fjsn0b4e2a83c8b7",
+        "x-rapidapi-host": "sofascore.p.rapidapi.com"
+    }
+    querystring = {"matchId": match_id}
+    response = requests.get(url, headers=headers, params=querystring)
+    return response.json()
 
-    # Преобразуем данные в формат JSON
-    data_json = json.loads(data.decode("utf-8"))
-    # Добавляем вывод данных для отладки
-    st.write("Response data:", data_json)  # Выводим ответ для анализа
-    return data_json
-
-# Функция отображения матчей
+# Функция для отображения матчей и их составов
 def display_matches():
     matches = get_upcoming_matches()
-
-    # Проверка наличия ключа 'events' в ответе
-    if 'events' in matches:
+    
+    if "events" in matches:
         for match in matches['events']:
-            home_team = match.get('homeTeam', {}).get('name', 'Unknown')
-            away_team = match.get('awayTeam', {}).get('name', 'Unknown')
-            start_time = match.get('startTime', 'Unknown')
-            match_name = f"{home_team} vs {away_team}"
-            st.write(f"Матч: {match_name} | Начало: {start_time}")
-            st.write(f"Ссылка: [Перейти на SofaScore](https://www.sofascore.com/)")  # Динамическая ссылка на матч
-            st.write("------")
+            home_team = match['homeTeam']['name']
+            away_team = match['awayTeam']['name']
+            match_id = match['id']
+            start_time = match['startDate']
+            
+            # Получаем составы команд для каждого матча
+            lineups = get_lineups(match_id)
+            home_lineup = lineups.get('home', {}).get('players', [])
+            away_lineup = lineups.get('away', {}).get('players', [])
+            
+            # Показ информации
+            st.write(f"{home_team} vs {away_team} - {start_time}")
+            st.write(f"Составы команд:")
+            st.write(f"  {home_team} - {[player['name'] for player in home_lineup]}")
+            st.write(f"  {away_team} - {[player['name'] for player in away_lineup]}")
+            st.write("---")
     else:
-        st.write("Нет предстоящих матчей или неверный формат данных.")
+        st.write("Нет предстоящих матчей.")
 
 # Настройка Streamlit
-st.title('Предстоящие футбольные события')
+st.title('Предстоящие футбольные матчи')
 display_matches()
